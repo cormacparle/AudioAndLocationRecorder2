@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -57,11 +59,11 @@ import android.widget.TextView;
 public class Hertz extends Activity {
 
   private static final int WAV_HEADER_LENGTH = 44;
-  private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd_HH.mm.ss");
+  private static final SimpleDateFormat filenameDateFormat = new SimpleDateFormat("yyyyMMdd-HHmmss");
+  private static final SimpleDateFormat displayDateFormat = new SimpleDateFormat("HH:mm:ss");
   private static final int NOTICE_RECORD = 0;
 
   private Button actionButton;
-  private ImageButton newTimestamp;
   private EditText editText;
   private String filename;
   private ProgressBar saving;
@@ -77,7 +79,7 @@ public class Hertz extends Activity {
   /**
    * The sample rate at which we'll record, and save, the WAV file.
    */
-  public int sampleRate = 44100;
+  public int sampleRate = 8000;
   private NotificationManager notificationManager;
 
   @Override
@@ -87,7 +89,6 @@ public class Hertz extends Activity {
 
     // set up GUI references
     actionButton = (Button) findViewById(R.id.actionButton);
-    newTimestamp = (ImageButton) findViewById(R.id.newTimestamp);
     editText = (EditText) findViewById(R.id.editText);
     saving = (ProgressBar) findViewById(R.id.saving);
     startedRecording = findViewById(R.id.startedRecording);
@@ -107,17 +108,7 @@ public class Hertz extends Activity {
     saving.setVisibility(View.GONE);
     editText.setSingleLine(true);
 
-    newTimestamp.setOnClickListener(new OnClickListener() {
-
-      @Override
-      public void onClick(View v) {
-        String timedFilename = "Rec_";
-        Date date = new Date();
-        timedFilename += dateFormat.format(date);
-        editText.setText(timedFilename);
-      }
-    });
-
+    
     actionButton.setOnClickListener(new OnClickListener() {
 
       @Override
@@ -168,7 +159,6 @@ public class Hertz extends Activity {
           public void run() {
             actionButton.setEnabled(true);
             editText.setEnabled(true);
-            newTimestamp.setEnabled(true);
             actionButton.setText("Start recording");
             saving.setVisibility(View.GONE);
           }
@@ -195,11 +185,18 @@ public class Hertz extends Activity {
     }
 
     // check that the user's supplied a file name
-    filename = editText.getText().toString();
-    if (filename.equals("") || filename == null) {
-      showDialog("Enter a file name", "Please give your file a name. It's the least it deserves.");
+    Pattern pattern = Pattern.compile("^[A-Za-z][0-9]{2}$");
+    Matcher matcher = pattern.matcher(editText.getText().toString());
+    if (matcher.find()) {
+    	filename = editText.getText().toString();
+    	Date date = new Date();
+        filename += '-' + filenameDateFormat.format(date);
+    } else {
+      editText.setText("");
+      showDialog("Enter square", "Must be one letter and two numbers e.g. N23");
       return;
     }
+    
     if (!filename.endsWith(".wav")) {
       filename += ".wav";
     }
@@ -238,13 +235,12 @@ public class Hertz extends Activity {
   public void startRecording() {
     isListening = true;
     editText.setEnabled(false);
-    newTimestamp.setEnabled(false);
     actionButton.setText("Stop recording");
     Thread s = new Thread(new SpaceCheck());
     s.start();
     Thread t = new Thread(new Capture());
     t.start();
-    startedRecordingTime.setText(dateFormat.format(new Date()));
+    startedRecordingTime.setText(displayDateFormat.format(new Date()));
     startedRecording.setVisibility(View.VISIBLE);
     setNotification();
   }

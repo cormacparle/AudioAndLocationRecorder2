@@ -49,15 +49,7 @@
 
 	</LinearLayout>
 		
-	<TextView android:layout_width="wrap_content"
-		android:layout_height="wrap_content"
-		android:text="Choose sampling rate:"
-		android:layout_marginTop="10dip" android:layout_marginBottom="5dip"/>
-		
-	<Spinner android:layout_height="wrap_content"
-		android:layout_width="280dip"
-		android:id="@+id/spinner"
-		android:entries="@array/sampleRates"/>
+	
 	
 	<LinearLayout android:layout_height="wrap_content"
 		android:id="@+id/buttonLayout"

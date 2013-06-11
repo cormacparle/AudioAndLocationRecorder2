@@ -45,7 +45,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
-import android.widget.Spinner;
 import android.widget.TextView;
 
 /**
@@ -66,7 +65,6 @@ public class Hertz extends Activity {
   private EditText editText;
   private String filename;
   private ProgressBar saving;
-  private Spinner spinner;
   private View startedRecording;
   private TextView startedRecordingTime;
 
@@ -79,7 +77,7 @@ public class Hertz extends Activity {
   /**
    * The sample rate at which we'll record, and save, the WAV file.
    */
-  public int sampleRate = 8000;
+  public int sampleRate = 44100;
   private NotificationManager notificationManager;
 
   @Override
@@ -92,7 +90,6 @@ public class Hertz extends Activity {
     newTimestamp = (ImageButton) findViewById(R.id.newTimestamp);
     editText = (EditText) findViewById(R.id.editText);
     saving = (ProgressBar) findViewById(R.id.saving);
-    spinner = (Spinner) findViewById(R.id.spinner);
     startedRecording = findViewById(R.id.startedRecording);
     startedRecordingTime = (TextView)findViewById(R.id.startedRecordingTime);
 
@@ -239,7 +236,6 @@ public class Hertz extends Activity {
   }
 
   public void startRecording() {
-    sampleRate = Integer.parseInt((String) spinner.getSelectedItem());
     isListening = true;
     editText.setEnabled(false);
     newTimestamp.setEnabled(false);

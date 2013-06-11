@@ -50,10 +50,11 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 /**
- * An activity that allows the user to record full-quality audio at a variety of sample rates, and
- * save to a WAV file
+ * An activity that allows the user to record full-quality audio and save to a WAV file
+ * plus simultaneously record location and save to a .csv file
  * 
  * @author Rhodri Karim
+ * @author Cormac Parle
  * 
  */
 public class Hertz extends Activity {
@@ -79,7 +80,7 @@ public class Hertz extends Activity {
   /**
    * The sample rate at which we'll record, and save, the WAV file.
    */
-  public int sampleRate = 8000;
+  public int sampleRate = 44100;
   private NotificationManager notificationManager;
 
   @Override

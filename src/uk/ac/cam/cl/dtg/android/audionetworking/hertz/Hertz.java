@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -33,6 +34,9 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -76,6 +80,11 @@ public class Hertz extends Activity {
   private File outFile;
 
   private boolean isListening;
+  
+  private LocationManager locationManager = null;
+  private LocationListener locationListener = null;
+  private PrintWriter locationFileWriter = null;
+  private long recordingStartTime  = 0;
 
   /**
    * The sample rate at which we'll record, and save, the WAV file.
@@ -124,6 +133,8 @@ public class Hertz extends Activity {
       }
 
     });
+    
+    locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
   }
 
   /**
@@ -167,6 +178,13 @@ public class Hertz extends Activity {
       }
     };
     thread.start();
+    
+    //Stop the audio recording too
+    locationManager.removeUpdates(locationListener);
+	if (locationFileWriter instanceof PrintWriter) {
+		locationFileWriter.close();
+		locationFileWriter = null;
+	}
   }
 
   /**
@@ -198,13 +216,10 @@ public class Hertz extends Activity {
       return;
     }
     
-    if (!filename.endsWith(".wav")) {
-      filename += ".wav";
-    }
-
+    
     // ask if file should be overwritten
-    File userFile = new File(Environment.getExternalStorageDirectory() + "/" + filename);
-    if (userFile.exists()) {
+    File audioFile = new File(Environment.getExternalStorageDirectory() + "/" + filename + ".wav");
+    if (audioFile.exists()) {
       AlertDialog.Builder builder = new AlertDialog.Builder(Hertz.this);
       builder.setTitle("File already exists").setMessage(
           "Do you want to overwrite the existing " + "file with that name?").setCancelable(false)
@@ -237,10 +252,59 @@ public class Hertz extends Activity {
     isListening = true;
     editText.setEnabled(false);
     actionButton.setText("Stop recording");
+
     Thread s = new Thread(new SpaceCheck());
     s.start();
+    
+    //LOCATION RECORDING
+    String sdDirectory = Environment.getExternalStorageDirectory().toString();
+    File locationFile = new File(sdDirectory + "/" + filename + ".csv");
+	if (locationFile.exists()) {
+		locationFile.delete();
+	}
+		
+	try {
+		locationFile.createNewFile();
+		locationFileWriter = new PrintWriter(locationFile);
+	} catch (Exception e) {
+		e.printStackTrace();
+		showDialog("Error creating file", "The location file '" + filename + ".csv' "
+                    + "couldn't be created. Please try again.");
+        locationFileWriter = null;
+        actionButton.performClick();
+    }
+	recordingStartTime = 0;
+	locationFileWriter.println("Seconds since recording started,Latitude,Longitude,Accuracy (m),Speed (m/s),Altitude (m)");
+	locationFileWriter.flush();
+	  
+	// Define a listener that responds to location updates
+	locationListener = new LocationListener() {
+	    public void onLocationChanged(Location location) {
+	    	if (recordingStartTime == 0) {
+	    		recordingStartTime = System.currentTimeMillis();
+	    	}
+			long msSinceStart = System.currentTimeMillis() - recordingStartTime;
+	    	locationFileWriter.println(Double.toString((double)msSinceStart / 1000) + "," +
+    			location.getLatitude() + "," +
+				location.getLongitude() + "," +
+				location.getAccuracy() + "," +
+				location.getSpeed() + "," +
+  				location.getAltitude());
+		    	locationFileWriter.flush();
+		}
+		public void onStatusChanged(String provider, int status, Bundle extras) {}
+		public void onProviderEnabled(String provider) {}
+		public void onProviderDisabled(String provider) {}
+	};
+	
+	// Register the listener with the Location Manager to receive location updates
+	locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10, 10, locationListener);
+	locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 10, 10, locationListener);
+    
+	//AUDIO RECORDING    
     Thread t = new Thread(new Capture());
     t.start();
+	
     startedRecordingTime.setText(displayDateFormat.format(new Date()));
     startedRecording.setVisibility(View.VISIBLE);
     setNotification();
@@ -340,7 +404,7 @@ public class Hertz extends Activity {
       byte[] tempBuffer = new byte[bufferSize];
 
       String sdDirectory = Environment.getExternalStorageDirectory().toString();
-      outFile = new File(sdDirectory + "/" + filename);
+      outFile = new File(sdDirectory + "/" + filename + ".wav");
       if (outFile.exists())
         outFile.delete();
 
@@ -353,8 +417,8 @@ public class Hertz extends Activity {
         runOnUiThread(new Runnable() {
           @Override
           public void run() {
-            showDialog("Error creating file", "The WAV file you specified "
-                + "couldn't be created. Try again with a " + "different filename.");
+            showDialog("Error creating file", "The audio file '" + filename + ".wav' "
+                + "couldn't be created. Please try again.");
             outFile = null;
             actionButton.performClick();
           }
@@ -403,6 +467,8 @@ public class Hertz extends Activity {
       }
     }
   }
+  
+ 
 
   private void showDialog(String title, String message){
     dialog.setTitle(title);

@@ -50,8 +50,8 @@ import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -87,6 +87,8 @@ public class AudioAndLocationRecorder2 extends Activity {
   private LocationListener locationListener = null;
   private PrintWriter locationFileWriter = null;
   private long recordingStartTime  = 0;
+  
+  private CheckBox checkBox;
 
   /**
    * The sample rate at which we'll record, and save, the WAV file.
@@ -105,6 +107,7 @@ public class AudioAndLocationRecorder2 extends Activity {
     saving = (ProgressBar) findViewById(R.id.saving);
     startedRecording = findViewById(R.id.startedRecording);
     startedRecordingTime = (TextView)findViewById(R.id.startedRecordingTime);
+    checkBox = (CheckBox)findViewById(R.id.monitorSignal);
 
     // get a generic dialog ready for alerts
     dialog = new AlertDialog.Builder(this).create();
@@ -173,6 +176,8 @@ public class AudioAndLocationRecorder2 extends Activity {
           public void run() {
             actionButton.setEnabled(true);
             editText.setEnabled(true);
+            checkBox.setEnabled(true);
+            checkBox.setChecked(true);
             actionButton.setText("Start recording");
             saving.setVisibility(View.GONE);
           }
@@ -252,6 +257,7 @@ public class AudioAndLocationRecorder2 extends Activity {
 
   public void startRecording() {
     isListening = true;
+    checkBox.setEnabled(false);
     editText.setEnabled(false);
     actionButton.setText("Stop recording");
 
@@ -466,7 +472,7 @@ public class AudioAndLocationRecorder2 extends Activity {
           outStream.write(tempBuffer);
           
           //Check for problems with signal
-          if (!checkSignal) {
+          if (checkBox.isChecked() && !checkSignal) {
         	  countdown--;
         	  if (countdown == 0) {
         		  checkSignal = true;
@@ -532,7 +538,7 @@ public class AudioAndLocationRecorder2 extends Activity {
 		      @Override
 		      public void run() {
 		    	showDialog("Bad audio signal", new StringBuilder()
-		    		.append("Audio signal too quiet - please check your lead and your detector sensitivity.")
+		    		.append("Audio signal too quiet - please check your lead and your detector sensitivity and volume.")
 		    		.append("\nStopped recording at ")
 		    		.append(displayDateFormat.format(new Date()))
 		    		.append(".\nWhat you have recorded so far has been saved to disk.")

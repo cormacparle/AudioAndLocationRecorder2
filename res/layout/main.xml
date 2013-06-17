@@ -30,7 +30,9 @@
     
 	<TextView android:layout_height="wrap_content"
 		android:layout_width="wrap_content"
-		android:text="Enter square (e.g. N23)" android:layout_marginBottom="5dip"/>
+		android:text="Enter square (e.g. N23)"
+		android:textAppearance="?android:attr/textAppearanceLarge" 
+		android:layout_marginBottom="5dip"/>
 		
 	<LinearLayout android:layout_height="wrap_content"
 		android:weightSum="6"
@@ -44,6 +46,11 @@
 	
 	</LinearLayout>
 		
+	<CheckBox android:id="@+id/monitorSignal"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Check audio signal"
+        android:checked="true"/>
 	
 	
 	<LinearLayout android:layout_height="wrap_content"

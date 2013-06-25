@@ -260,7 +260,7 @@ public class AudioAndLocationRecorder2 extends Activity {
     checkBox.setEnabled(false);
     editText.setEnabled(false);
     actionButton.setText("Stop recording");
-
+    
     Thread s = new Thread(new SpaceCheck());
     s.start();
     
@@ -378,24 +378,34 @@ public class AudioAndLocationRecorder2 extends Activity {
     //
     //The signal should be quiet for 320ms while the detector is sampling, 
     //then loud for 3200ms when it's playing back the time-expanded sample
+
+    //The threshold for determining whether the signal is quiet or loud
+    //is set as a fraction of the average taken over the first X buffers
+    //
+    //Then there's a grace period of Y buffers where we don't check the signal
+    //
+    //Then we monitor the signal for Z buffers, then we assume it'll be ok
+    //after that
     
-    private int quietSignalThreshold = 1800;
+    private byte averageFor = 30;
+    private byte ignoreFor = 1;
+    private int monitorFor = 150;
     
+     
     //The audio buffer is 4096 samples long, which is around 90ms, so if the
     //signal is quiet for more than approx 5 audio buffers then there's probably 
     //a problem with the lead
-    private byte quietSignalCount;
+    private float quietSignalThreshold = 0;
     private byte quietSignalCountThreshold = 5;
     
     //there should be 3200ms / audio-buffer-length loud samples
     //before the next quiet sample (approx 34, use min-max range)
-    private byte countSinceLastQuietSignal;
     private byte countSinceLastQuietSignalMin = 30;
     private byte countSinceLastQuietSignalMax = 40;
     
-    //We need a grace period at the start where we don't check the signal at all
-    private byte countdown;
-    private boolean checkSignal;
+    //If the quietSignalThreshold is below this number then really the signal
+    //is just too quiet to be distinguishable from noise
+    private float thisQuietIsTooQuiet = 200;
 
     // the actual output format is big-endian, signed
 
@@ -403,12 +413,14 @@ public class AudioAndLocationRecorder2 extends Activity {
     public void run() {
       // We're important...
       android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
+      
 
       //Initialise values for signal checking variables
-      quietSignalCount = 0;
-      countSinceLastQuietSignal = 0;
-      countdown = 50;
-      checkSignal = false;
+      int quietSignalCount = 0;
+      int countSinceLastQuietSignal = 0;
+      boolean checkSignal = false;
+      int bufferCount = 0;
+      int sumAmplitudeMax = 0;
       
       // Allocate Recorder and Start Recording...
       int minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioEncoding);
@@ -471,19 +483,47 @@ public class AudioAndLocationRecorder2 extends Activity {
           recordInstance.read(tempBuffer, 0, bufferSize);
           outStream.write(tempBuffer);
           
-          //Check for problems with signal
-          if (checkBox.isChecked() && !checkSignal) {
-        	  countdown--;
-        	  if (countdown == 0) {
-        		  checkSignal = true;
-        	  }
-          } 
           int amplitudeMax = 0;
           for (int i=0; i < tempBuffer.length/2; i++) {
         	  int amplitude = Math.abs((int)getShort(tempBuffer[i*2], tempBuffer[i*2+1]));
         	  if (amplitude > amplitudeMax) {
         		  amplitudeMax = amplitude;
               }
+          }
+          //Check for problems with signal
+          if (checkBox.isChecked()) {
+        	  if (bufferCount == 0) {
+        		  runOnUiThread(new Runnable() {
+        	    	  @Override
+        	          public void run() {
+		        		  actionButton.setText("Checking signal ...");
+		        		  saving.setVisibility(View.VISIBLE);
+        	    	  }
+        		  });
+        	  } else if (bufferCount < (int)averageFor && bufferCount != 0) { 		
+        		  sumAmplitudeMax += amplitudeMax; 
+        	  } else if (bufferCount == (int)averageFor + 1) {				//+1 cos we skipped the first buffer
+        		  
+        		  quietSignalThreshold = (sumAmplitudeMax / averageFor) * 9/10;
+        		  Log.i("Capture", "qst " + quietSignalThreshold);
+    			  
+        		  if (quietSignalThreshold < thisQuietIsTooQuiet) {
+        			  //Average level is just too low
+        			  throw new SignalTooQuietException();
+        		  }
+        	  } else if (bufferCount == (int)averageFor + (int)ignoreFor) {
+        		  checkSignal = true;
+        	  } else if (bufferCount == (int)averageFor + (int)ignoreFor + monitorFor) {
+        		  checkSignal = false;
+        		  runOnUiThread(new Runnable() {
+        	    	  @Override
+        	          public void run() {
+        	    		  actionButton.setText("Stop recording");
+        	    	      saving.setVisibility(View.GONE);    		  
+        	    	  }
+        	      });
+        	  }
+        	  bufferCount++;
           }
           if (amplitudeMax < quietSignalThreshold) {
         	  quietSignalCount++;
@@ -499,10 +539,8 @@ public class AudioAndLocationRecorder2 extends Activity {
         	  quietSignalCount = 0;
         	  countSinceLastQuietSignal++;
           }
-          //Log.d("Capture", "Amplitude max " + amplitudeMax + " qsc " + quietSignalCount + " cslqs " + countSinceLastQuietSignal);
-          
           if (checkSignal) {
-        	  if (quietSignalCount > quietSignalCountThreshold) {
+	          if (quietSignalCount > quietSignalCountThreshold) {
         		  //the signal has been quiet for too long
 				  throw new SignalTooQuietException();
 	          } else if (countSinceLastQuietSignal > countSinceLastQuietSignalMax) {
@@ -510,7 +548,9 @@ public class AudioAndLocationRecorder2 extends Activity {
 	        	  throw new SignalWrongPatternException();
 	          } 
           }
+          Log.i("Capture", bufferCount + " Amplitude max " + amplitudeMax + " qsc " + quietSignalCount + " cslqs " + countSinceLastQuietSignal);
         }
+        
       } catch (final IOException e) {
         runOnUiThread(new Runnable() {
 
@@ -559,7 +599,7 @@ public class AudioAndLocationRecorder2 extends Activity {
 		        actionButton.performClick();
 		      }
 		  });
-      }
+      } 
 
       // we're done recording
       Log.d("Capture", "Stopping recording");

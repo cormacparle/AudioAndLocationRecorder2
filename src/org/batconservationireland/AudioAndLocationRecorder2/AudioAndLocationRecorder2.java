@@ -382,13 +382,14 @@ public class AudioAndLocationRecorder2 extends Activity {
     //The threshold for determining whether the signal is quiet or loud
     //is set as a fraction of the average taken over the first X buffers
     //
-    //Then there's a grace period of Y buffers where we don't check the signal
+    //Then we ignore the signal for Y buffers (at least one quiet/loud 
+    //cycle)
     //
     //Then we monitor the signal for Z buffers, then we assume it'll be ok
     //after that
     
     private byte averageFor = 30;
-    private byte ignoreFor = 1;
+    private byte ignoreFor = 45;
     private int monitorFor = 150;
     
      
@@ -429,8 +430,8 @@ public class AudioAndLocationRecorder2 extends Activity {
         runOnUiThread(new Runnable() {
           @Override
           public void run() {
-            showDialog("Error recording audio", "Your audio hardware doesn't support the sampling rate you have specified." +
-              "Try a lower sampling rate, if that doesn't work your audio hardware might be broken.");
+            showDialog("Error recording audio", "The audio hardware doesn't support the sampling rate you have specified." +
+              "Are you sure your lead is plugged in?");
             actionButton.performClick();
           }
         });
@@ -504,13 +505,14 @@ public class AudioAndLocationRecorder2 extends Activity {
         		  sumAmplitudeMax += amplitudeMax; 
         	  } else if (bufferCount == (int)averageFor + 1) {				//+1 cos we skipped the first buffer
         		  
-        		  quietSignalThreshold = (sumAmplitudeMax / averageFor) * 9/10;
-        		  Log.i("Capture", "qst " + quietSignalThreshold);
+        		  quietSignalThreshold = (sumAmplitudeMax / averageFor) * 7/10 ;
+        		  //Log.i("Capture", "qst " + quietSignalThreshold);
     			  
         		  if (quietSignalThreshold < thisQuietIsTooQuiet) {
         			  //Average level is just too low
         			  throw new SignalTooQuietException();
         		  }
+        		  
         	  } else if (bufferCount == (int)averageFor + (int)ignoreFor) {
         		  checkSignal = true;
         	  } else if (bufferCount == (int)averageFor + (int)ignoreFor + monitorFor) {
@@ -531,6 +533,7 @@ public class AudioAndLocationRecorder2 extends Activity {
         		  //if this is the first of a new set of quiet signals, check if the gap between
         		  //this set of quiet signals and the previous one was long enough
         		  if (countSinceLastQuietSignal < countSinceLastQuietSignalMin) {
+        			  //Log.i("Capture", "Unexpected quiet signal (" + amplitudeMax + " (" + quietSignalThreshold + "))");
         			  throw new SignalWrongPatternException();
     	          } 
         	  }
@@ -545,10 +548,11 @@ public class AudioAndLocationRecorder2 extends Activity {
 				  throw new SignalTooQuietException();
 	          } else if (countSinceLastQuietSignal > countSinceLastQuietSignalMax) {
 	        	  //the signal has been loud for too long
+	        	  Log.i("Capture", "Too many loud signals");
 	        	  throw new SignalWrongPatternException();
 	          } 
           }
-          Log.i("Capture", bufferCount + " Amplitude max " + amplitudeMax + " qsc " + quietSignalCount + " cslqs " + countSinceLastQuietSignal);
+          //Log.i("Capture", bufferCount + " Amplitude max " + amplitudeMax + " qsc " + quietSignalCount + " cslqs " + countSinceLastQuietSignal);
         }
         
       } catch (final IOException e) {

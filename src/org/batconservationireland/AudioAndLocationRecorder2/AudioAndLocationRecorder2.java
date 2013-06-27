@@ -493,15 +493,7 @@ public class AudioAndLocationRecorder2 extends Activity {
           }
           //Check for problems with signal
           if (checkBox.isChecked()) {
-        	  if (bufferCount == 0) {
-        		  runOnUiThread(new Runnable() {
-        	    	  @Override
-        	          public void run() {
-		        		  actionButton.setText("Checking signal ...");
-		        		  saving.setVisibility(View.VISIBLE);
-        	    	  }
-        		  });
-        	  } else if (bufferCount < (int)averageFor && bufferCount != 0) { 		
+        	  if (bufferCount < (int)averageFor && bufferCount != 0) { 		//first buffer usually contains a click, so ignore	
         		  sumAmplitudeMax += amplitudeMax; 
         	  } else if (bufferCount == (int)averageFor + 1) {				//+1 cos we skipped the first buffer
         		  
@@ -517,13 +509,6 @@ public class AudioAndLocationRecorder2 extends Activity {
         		  checkSignal = true;
         	  } else if (bufferCount == (int)averageFor + (int)ignoreFor + monitorFor) {
         		  checkSignal = false;
-        		  runOnUiThread(new Runnable() {
-        	    	  @Override
-        	          public void run() {
-        	    		  actionButton.setText("Stop recording");
-        	    	      saving.setVisibility(View.GONE);    		  
-        	    	  }
-        	      });
         	  }
         	  bufferCount++;
           }

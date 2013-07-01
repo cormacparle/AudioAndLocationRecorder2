@@ -24,6 +24,8 @@ import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.batconservationireland.AudioAndLocationRecorder2.R;
@@ -90,6 +92,9 @@ public class AudioAndLocationRecorder2 extends Activity {
   
   private CheckBox checkBox;
 
+  boolean warningHasBeenShown;
+
+  
   /**
    * The sample rate at which we'll record, and save, the WAV file.
    */
@@ -129,7 +134,7 @@ public class AudioAndLocationRecorder2 extends Activity {
       @Override
       public void onClick(View v) {
 
-        // if we're already recording... start saving
+    	// if we're already recording... start saving
         if (isListening) {
           endRecording();
         } else {
@@ -406,23 +411,54 @@ public class AudioAndLocationRecorder2 extends Activity {
     
     //If the quietSignalThreshold is below this number then really the signal
     //is just too quiet to be distinguishable from noise
-    private float thisQuietIsTooQuiet = 200;
-
+    private float thisQuietIsTooQuiet = 150;
+    
     // the actual output format is big-endian, signed
 
+    /**
+     * Show a warning if there is a problem with the signal
+     * 
+     * @param int warningCode
+     */
+    public void showWarning(int warningCode) {
+    	
+    	final StringBuilder sb = new StringBuilder();
+		switch (warningCode) {
+			case 1:
+			case 3:
+				sb.append("Audio signal too quiet - please check your lead and your detector sensitivity and volume.");
+				break;
+			case 2:
+			case 4:
+				sb.append("Please check your lead and the 'time' and 'div' settings on your detector.");
+				break;
+		}
+		sb.append("\n\nRecording has not stopped, this is just a warning (code " + warningCode + ").");
+		
+		runOnUiThread(new Runnable() {
+		      @Override
+		      public void run() {
+		    	showDialog("Audio signal warning", sb.toString());
+		    	//Stop checking the signal after we've done a warning, 
+		    	//no point in having loads of warnings
+		    	checkBox.setChecked(false);
+		      }
+		});
+ 
+    }
+    
     @Override
     public void run() {
       // We're important...
       android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
       
-
       //Initialise values for signal checking variables
       int quietSignalCount = 0;
       int countSinceLastQuietSignal = 0;
       boolean checkSignal = false;
       int bufferCount = 0;
       int sumAmplitudeMax = 0;
-      
+            
       // Allocate Recorder and Start Recording...
       int minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioEncoding);
       Log.d("Capture", "Min buffer size: " + minBufferSize);
@@ -497,46 +533,60 @@ public class AudioAndLocationRecorder2 extends Activity {
         		  sumAmplitudeMax += amplitudeMax; 
         	  } else if (bufferCount == (int)averageFor + 1) {				//+1 cos we skipped the first buffer
         		  
-        		  quietSignalThreshold = (sumAmplitudeMax / averageFor) * 7/10 ;
+        		  float averageSignal = sumAmplitudeMax / averageFor;
         		  //Log.i("Capture", "qst " + quietSignalThreshold);
     			  
-        		  if (quietSignalThreshold < thisQuietIsTooQuiet) {
+        		  if (averageSignal < thisQuietIsTooQuiet) {
         			  //Average level is just too low
-        			  throw new SignalTooQuietException();
+        			  showWarning(1);
         		  }
+        		  
+        		  quietSignalThreshold = averageSignal * 85/100;
         		  
         	  } else if (bufferCount == (int)averageFor + (int)ignoreFor) {
         		  checkSignal = true;
         	  } else if (bufferCount == (int)averageFor + (int)ignoreFor + monitorFor) {
         		  checkSignal = false;
         	  }
-        	  bufferCount++;
+        	  
+	          if (amplitudeMax < quietSignalThreshold) {
+	        	  quietSignalCount++;
+	        	  if (quietSignalCount == 1 && checkSignal) {
+	        		  //if this is the first of a new set of quiet signals, check if the gap between
+	        		  //this set of quiet signals and the previous one was long enough
+	        		  if (countSinceLastQuietSignal < countSinceLastQuietSignalMin) {
+	        			  showWarning(2);
+	    	          } 
+	        	  }
+	        	  countSinceLastQuietSignal = 0;
+	          } else {
+	        	  quietSignalCount = 0;
+	        	  countSinceLastQuietSignal++;
+	          }
+	          if (checkSignal) {
+		          if (quietSignalCount > quietSignalCountThreshold) {
+	        		  //the signal has been quiet for too long
+		        	  showWarning(3);
+		          } else if (countSinceLastQuietSignal > countSinceLastQuietSignalMax) {
+		        	  //the signal has been loud for too long
+		        	  showWarning(4);
+		          } 
+	          }
+	          
           }
-          if (amplitudeMax < quietSignalThreshold) {
-        	  quietSignalCount++;
-        	  if (quietSignalCount == 1 && checkSignal) {
-        		  //if this is the first of a new set of quiet signals, check if the gap between
-        		  //this set of quiet signals and the previous one was long enough
-        		  if (countSinceLastQuietSignal < countSinceLastQuietSignalMin) {
-        			  //Log.i("Capture", "Unexpected quiet signal (" + amplitudeMax + " (" + quietSignalThreshold + "))");
-        			  throw new SignalWrongPatternException();
-    	          } 
-        	  }
-        	  countSinceLastQuietSignal = 0;
-          } else {
-        	  quietSignalCount = 0;
-        	  countSinceLastQuietSignal++;
-          }
-          if (checkSignal) {
-	          if (quietSignalCount > quietSignalCountThreshold) {
-        		  //the signal has been quiet for too long
-				  throw new SignalTooQuietException();
-	          } else if (countSinceLastQuietSignal > countSinceLastQuietSignalMax) {
-	        	  //the signal has been loud for too long
-	        	  Log.i("Capture", "Too many loud signals");
-	        	  throw new SignalWrongPatternException();
-	          } 
-          }
+          
+          if (bufferCount == (int)averageFor + (int)ignoreFor + monitorFor) {
+    		  //dismiss the warning dialog if it's showing
+    		  runOnUiThread(new Runnable() {
+    	          @Override
+    	          public void run() {
+    	        	if (dialog.isShowing()) {
+    	        		dialog.dismiss();
+    	        	}
+    	          }
+    	      });
+    	  }
+          bufferCount++;
           //Log.i("Capture", bufferCount + " Amplitude max " + amplitudeMax + " qsc " + quietSignalCount + " cslqs " + countSinceLastQuietSignal);
         }
         
@@ -562,32 +612,6 @@ public class AudioAndLocationRecorder2 extends Activity {
             actionButton.performClick();
           }
         });
-      } catch (SignalTooQuietException stq) {
-    	  runOnUiThread(new Runnable() {
-		      @Override
-		      public void run() {
-		    	showDialog("Bad audio signal", new StringBuilder()
-		    		.append("Audio signal too quiet - please check your lead and your detector sensitivity and volume.")
-		    		.append("\nStopped recording at ")
-		    		.append(displayDateFormat.format(new Date()))
-		    		.append(".\nWhat you have recorded so far has been saved to disk.")
-		    		.toString());
-		        actionButton.performClick();
-		      }
-		  });
-      } catch (SignalWrongPatternException swp) {
-    	  runOnUiThread(new Runnable() {
-		      @Override
-		      public void run() {
-		    	showDialog("Bad audio signal", new StringBuilder()
-		    		.append("Please check your lead and the 'time' and 'div' settings on your detector.")
-		    		.append("\nStopped recording at ")
-		    		.append(displayDateFormat.format(new Date()))
-		    		.append(".\nWhat you have recorded so far has been saved to disk.")
-		    		.toString());
-		        actionButton.performClick();
-		      }
-		  });
       } 
 
       // we're done recording
@@ -601,8 +625,6 @@ public class AudioAndLocationRecorder2 extends Activity {
     }
   }
   
-  private class SignalTooQuietException extends Exception {}
-  private class SignalWrongPatternException extends Exception {}
 
   private void showDialog(String title, String message){
     dialog.setTitle(title);

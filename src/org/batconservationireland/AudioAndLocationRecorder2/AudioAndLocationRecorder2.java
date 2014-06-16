@@ -286,17 +286,14 @@ public class AudioAndLocationRecorder2 extends Activity {
         locationFileWriter = null;
         actionButton.performClick();
     }
-	recordingStartTime = 0;
+	recordingStartTime = System.currentTimeMillis();
 	locationFileWriter.println("Seconds since recording started,Latitude,Longitude,Accuracy (m),Speed (m/s),Altitude (m)");
 	locationFileWriter.flush();
 	  
 	// Define a listener that responds to location updates
 	locationListener = new LocationListener() {
 	    public void onLocationChanged(Location location) {
-	    	if (recordingStartTime == 0) {
-	    		recordingStartTime = System.currentTimeMillis();
-	    	}
-			long msSinceStart = System.currentTimeMillis() - recordingStartTime;
+	    	long msSinceStart = System.currentTimeMillis() - recordingStartTime;
 	    	locationFileWriter.println(Double.toString((double)msSinceStart / 1000) + "," +
     			location.getLatitude() + "," +
 				location.getLongitude() + "," +
